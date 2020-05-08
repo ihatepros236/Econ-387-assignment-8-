@@ -1,0 +1,201 @@
+---
+title: "Assignment 8"
+author: "Muhammad Ahmad, 301297154"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(modelr)
+library(knitr)
+library(ISLR)
+setwd("C:/Users/Muhammad/Projects/week8/HW8")
+```
+
+# Questions
+
+For this week's assignment, you will be using two data sets provided on canvas, "Advertising.csv" for Q1 and "property_tax_report2018.csv" for Q2. 
+
+## Question 1
+
+### Question
+
+Follow instructions below to compare results the following four models: 
+
+- M1: `lm(Sales ~ Newspaper, data = Advertising)`
+- M2: `lm(Sales ~ Radio, data = Advertising)`
+- M3: `lm(Sales ~ TV, data = Advertising)`
+- M4: `lm(Sales ~ Newspaper + Radio + TV, data = Advertising)`
+
+
+1. Read your advertising data in as a tibble called `Advertising` and add the predictions for each model to the `Advertising` data using `add_predictions`
+2. Make a scatterplot that compares the predictions across the four models
+3. Comment on the resulting plot
+4. Add the residuals from each model to the `Advertising` data using `add_residuals`
+5. Compare the MSFE from the four models
+
+
+### Answer
+```{r}
+ Advertising<-read_csv("Advertising.csv")
+M1<-lm(Sales ~ Newspaper, data = Advertising)
+M2<-lm(Sales ~ Radio, data = Advertising)
+M3<-lm(Sales ~ TV, data = Advertising)
+M4<-lm(Sales ~ Newspaper + Radio + TV, data = Advertising)
+
+Advertising<-Advertising %>%
+add_predictions(M1, var = "News_prediction")%>%
+add_predictions(M2, var = "Radio_prediction")%>%
+add_predictions(M3, var = "TV_prediction")%>%
+add_predictions(M4, var = "All_prediction")
+
+
+
+ggplot(data = Advertising, aes(x=Sales, y=News_prediction)) +
+ geom_point()+labs(y="Predicted Sales Values")+ggtitle("NEWS")
+
+ggplot(data = Advertising, aes(x=Sales, y=Radio_prediction)) +
+ geom_point()+labs(y="Predicted Sales Values")+ggtitle("Radio")
+
+ggplot(data = Advertising, aes(x=Sales, y=TV_prediction)) +
+ geom_point()+labs(y="Predicted Sales Values")+ggtitle("TV")
+
+ggplot(data = Advertising, aes(x=Sales, y=All_prediction)) +
+ geom_point()+labs(y="Predicted Sales Values")+ggtitle("All")
+
+
+#We can observe when all 3 explantory variables are added in our linear model, spread of data points is less and predicted value is closer to observed value.
+
+Advertising<-Advertising%>%
+  add_residuals(M1, var="News_residuals")%>%
+    add_residuals(M2, var="Radio_residuals")%>%
+      add_residuals(M3, var="TV_residuals")%>%
+        add_residuals(M4, var="All_residuals")
+
+MFSE_News_lm<-mean((Advertising$News_residuals)^2)
+MFSE_RADIO_lm<-mean((Advertising$Radio_residuals)^2)
+MFSE_TV_lm<-mean((Advertising$TV_residuals)^2)
+MFSE_ALL_lm<-mean((Advertising$All_residuals)^2)
+
+# MFSE_ALL_lm has the lowest value which means model that has all 3 explanatory variables has smaller squared residuals and has closer predicted values to actual values on average. MFSE_News_lm has the largest value which means on average squared residuals are larger and on average predicted value will be further away from real values, than other models we have specified.
+
+MFSE_ALL_lm
+MFSE_News_lm
+MFSE_RADIO_lm
+MFSE_TV_lm
+```
+
+## Question 2
+
+### Question
+
+In this question we will do something similar to what we talked about in lecture where we create a grid of possible parameter values and then visualize the MSFE for different combinations. We'll work with the 2018 property tax assessement data.  
+
+1. Define the `MSFE_mine` function as was done in the lecture notes.
+
+2. Read in the `property_tax_report2018.csv` 
+
+3. Create a `yrs_since_improv` variable that measures the number of years since the property had a substantial improvement (`=2018-BIG_IMPROVEMENT_YEAR`). Also create a current improvement value variable that is measured in thousands (so $1M total value would be equal to 1000). We will ignore the land value for now and focus on the building.
+
+
+
+4. Construct a grid of values for the parameters (intercept and coefficient on years since improvement) `a0` and `a1`:
+  
+    - `a0grid`  including increments of 100 between starting at 0 and up to 2000 [0,100,200,300,400,500,..,1800,1900,2000] 
+    - `a1grid` including increments of 10  between -100 and 100 [-100,-90,-80,...,80,90,100] 
+
+
+5. Use `map2` to compute the MSFE for all values on this grid [thnking about how you can use `map2_dbl` where the inputs will be your grids, the function is `MSFE_mine` which you've already defined and you specify what the `y` variable is and what the `x` variable is. 
+
+6. Make a plot that visualizes the MSFE at all points in this grid
+
+
+7. Comment on the results of your plot. Are they surprising? What does this indicate about the relationship between years since an improvement and the value of the building? Regress the property value on years since improvement (`lm()`) and show the results of the regression (`summary()`). Do they align with your MSFE plot? [Even if you can't get to the plot, then you can still regress and comment on the relationship between property age and total value]. 
+
+8. Summarize data so that you calculate the average current improvement value by years since improvement in years and also calculate the total number of properties contributing to each mean. Create a scatter plot with the mean imiprovement value on the y-axis and `yrs_since_improv` on the x-axis and the scatter points scaled by the number of properties. Filter out extreme values or zoom in on portions of the graph you find interesting. Comment on whether you think a linear regression is appropriate to try to understand the relationship between age (or big improvements) and the value of the building.  
+9. Create a variable equal to the squared value of `yrs_since_improv`, named `yrs_since_improv2` and compare the MSFE from your regression above (with just `yrs_since_improv` as an explanatory variable) with one that also includes `yrs_since_improv2`.
+
+### Answer
+
+```{r}
+#1
+MSFE_mine <- function(a0,a1,y,x) {
+
+ yhat <- a0+a1*x
+ dev <- (y - yhat)^2
+ return(mean(dev, na.rm=TRUE))
+
+}
+
+```
+```{r}
+#2
+Property_tax<-read_csv("property_tax_report2018.csv")
+```
+
+```{r}
+#3
+Property_tax<-mutate(Property_tax,years_frm_improvement=TAX_ASSESSMENT_YEAR-BIG_IMPROVEMENT_YEAR)%>%
+mutate(improvement_Value=CURRENT_IMPROVEMENT_VALUE/1000)
+```
+
+```{r}
+#4 
+#from lecture example
+a0vals <- seq(from=0, to=2000, by=100)
+a1vals <- seq(from=-100, to=100, by=10)
+a0grid <- rep(a0vals, each=length(a1vals))
+a1grid <- rep(a1vals, times=length(a0vals))
+#cbind(a0grid,a1grid)
+```
+```{r}
+#5
+#similar as class lecture
+fit <- map2_dbl(a0grid,a1grid,MSFE_mine,y=Property_tax$improvement_Value,x=Property_tax$years_frm_improvement)
+
+
+models_df <- tibble(a0=a0grid,a1=a1grid,fit=fit)
+
+models_df
+```
+
+```{r}
+#6
+ggplot(data=models_df) +
+  geom_point(mapping=aes(x=a0, y=a1, size=fit))
+```
+
+```{r}
+#7
+summary(lm(improvement_Value~years_frm_improvement, data=Property_tax))
+
+#The plot shows that MSFE minimizes when a1 is slightly negative or zero,which is to be expected given that older houses may need repairs and are due another improvement, hence are less valuable on average. Our estimated coefficient of years from improvement is  around -3.36, hence as age of improvement increases house becomes less valuable.  
+```
+```{r}
+#8
+Property_tax%>%
+  group_by(years_frm_improvement)%>%filter(years_frm_improvement<100)%>%
+  summarize(average_value=mean(improvement_Value),total_number=n())%>%
+  filter(average_value<1500)%>%
+ ggplot(aes(x=years_frm_improvement, y=average_value,size=total_number))+
+  geom_point()
+
+# OLS model is fine,as long as our identification assumptions hold. However. the graph seem to be quadratic ( U/V shaped graph, parabola),hence we should be better off with a squared years from improvedment variable.  
+```
+```{r}
+#9
+reg1<-lm(improvement_Value~years_frm_improvement, data=Property_tax)
+Property_tax<-mutate(Property_tax, yearsfrm_squared=years_frm_improvement^2)
+reg2<-lm(improvement_Value~years_frm_improvement+yearsfrm_squared, data=Property_tax)
+
+summary(reg2)
+
+mean(resid(reg2)^2)
+mean(resid(reg1)^2)
+
+#The model with squared years from improvement and years from improvement has higher R-squared value, which means it has better fit(the MFSE is also smaller comparatively with new model) 
+```
+
+
